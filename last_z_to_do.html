@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LastZ To-Do List for the RAVENs</title>
+  <style>
+    :root {
+      --bg: #0b0f14; --panel:#121826; --muted:#9aa4b2; --text:#e7edf5;
+      --accent:#79c0ff; --ok-2:#34d399; --yellow:#facc15; --shadow:0 10px 30px rgba(0,0,0,.35); --radius:16px;
+      /* Rank Colors */
+      --rankS:#ef4444; /* red */
+      --rankA:#f59e0b; /* amber */
+      --rankB:#10b981; /* emerald */
+      --rankC:#3b82f6; /* blue */
+      --rankD:#9aa4b2; /* muted */
+    }
+    html, body {
+      margin:0; display:flex; justify-content:center; align-items:center; flex-direction:column; min-height:100vh;
+      color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,'Hiragino Kaku Gothic ProN',Meiryo,sans-serif;
+      background: var(--bg);
+      position: relative;
+    }
+    body::before {
+      content: "";
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(1200px 800px at 10% 0%, #0d1320, #080b12 60%);
+      pointer-events: none;
+    }
+    body { background: radial-gradient(1200px 800px at 10% 0%, #0d1320, #080b12 60%), var(--bg); background-attachment: fixed; }
+    .container { max-width:820px; width:100%; padding:24px 16px; position: relative; z-index: 1; }
+    header { text-align:center; margin-bottom:16px; color: var(--text) !important; }
+    .title { font-size:clamp(22px,2.6vw,34px); font-weight:800; display:inline-flex; align-items:center; gap:12px; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+
+    /* ★ オンライン風 点滅ランプ */
+    .title .dot {
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      background:var(--ok-2);
+      box-shadow:0 0 16px 6px rgba(52,211,153,.35);
+      animation: dotBlink 1.2s ease-in-out infinite;
+    }
+    @keyframes dotBlink {
+      0% {
+        opacity: 0.2;
+        transform: scale(0.85);
+        box-shadow:0 0 4px 0 rgba(52,211,153,.15);
+      }
+      50% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow:0 0 16px 6px rgba(52,211,153,.45);
+      }
+      100% {
+        opacity: 0.2;
+        transform: scale(0.85);
+        box-shadow:0 0 4px 0 rgba(52,211,153,.15);
+      }
+    }
+
+    .clock { font-variant-numeric: tabular-nums; color:var(--muted); font-size:14px; margin-top:6px; }
+    .panel { background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.0)); border:1px solid rgba(255,255,255,.08); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; }
+    .section { padding:16px; border:1px solid rgba(255,255,255,.06); border-radius:14px; background:rgba(255,255,255,.02); margin-bottom:16px; }
+    .section h2 { margin:0 0 10px; font-size:18px; display:flex; align-items:center; gap:10px; }
+    .badge { font-size:12px; color:#0b1220; background:var(--accent); padding:2px 8px; border-radius:999px; }
+    .badge.outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .list { display:grid; gap:8px; }
+    .item { position:relative; display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px; padding:12px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.03); overflow:hidden; }
+    .item.ro { grid-template-columns:1fr auto; }
+    .item.now { box-shadow: 0 0 0 2px rgba(250,204,21,.15) inset; }
+    .item.future { }
+    .item.clickable{ cursor:pointer; }
+    .muted { color: var(--muted); font-size:12px; }
+    .subs { margin:6px 0 0 0; padding-left:18px; color:var(--muted); font-size:12px; }
+    .subs li { margin:2px 0; }
+
+    /* メイン項目アイコン */
+    .item-icon { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; margin-right:6px; font-size:18px; }
+
+    /* サブ項目アイコン */
+    .sub-icon { display:inline-block; width:1.4em; text-align:center; margin-right:4px; font-size:14px; }
+
+    /* Rank badge */
+    .rank-badge { font-weight:700; font-size:11px; letter-spacing:.5px; padding:2px 6px; border-radius:999px; border:1px solid currentColor; display:inline-block; min-width:24px; text-align:center; }
+    .rank-S .rank-badge { color:var(--rankS); }
+    .rank-A .rank-badge { color:var(--rankA); }
+    .rank-B .rank-badge { color:var(--rankB); }
+    .rank-C .rank-badge { color:var(--rankC); }
+    .rank-D .rank-badge { color:var(--rankD); }
+
+    /* Rank accent on item */
+    .item::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; opacity:.9; }
+    .rank-S.item { border-color: rgba(239,68,68,.6); }
+    .rank-S.item::before { background:var(--rankS); }
+    .rank-A.item { border-color: rgba(245,158,11,.5); }
+    .rank-A.item::before { background:var(--rankA); }
+    .rank-B.item { border-color: rgba(16,185,129,.45); }
+    .rank-B.item::before { background:var(--rankB); }
+    .rank-C.item { border-color: rgba(59,130,246,.45); }
+    .rank-C.item::before { background:var(--rankC); }
+    .rank-D.item { border-color: rgba(154,164,178,.45); }
+    .rank-D.item::before { background:var(--rankD); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1 class="title"><span class="dot"></span> LastZ To-Do List for the RAVENs</h1>
+      <div class="clock" id="clock">--:--</div>
+      <div style="margin-top:6px;"><button id="reloadBtn" class="small">🔁 今日のプリセットを再投入（リセット）</button></div>
+    </header>
+
+    <div class="panel">
+      <div class="section">
+        <h2>🕐 今やるべきこと <span class="badge outline" id="now-count">0</span></h2>
+        <div id="now-list" class="list"></div>
+      </div>
+
+      <div class="section">
+        <h2>📅 今日やるべきこと <span class="badge outline" id="today-count">0</span></h2>
+        <div id="today-list" class="list"></div>
+      </div>
+
+      <div class="section">
+        <h2>⏳ これからやること <span class="badge outline" id="upcoming-count">0</span></h2>
+        <div id="upcoming-list" class="list"></div>
+      </div>
+
+      <div class="section">
+        <h2>✅ 完了済み <span class="badge outline" id="done-count">0</span></h2>
+        <div id="done-list" class="list"></div>
+      </div>
+
+      <div class="section">
+        <h2>🗓 明日の予定 <span class="badge outline" id="tomorrow-count">0</span></h2>
+        <div id="tomorrow-list" class="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==== 基本ユーティリティ ====
+    const STORAGE_KEY = 'loginless_todo_v1';
+    const PRESET_KEY  = 'loginless_todo_preset_date';
+    const OFFSET_HOURS = -11; // 終末(AP) = 日本時間 -11h（ロジックはAP基準）
+    const ZOMBIE_BASE_KEY = 'loginless_todo_zombie_base_day'; // ゾンビ暴君の基準日（AP日付の通し日）
+
+    const fmtDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const fmtTime = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
+    const apNow = () => new Date(Date.now() + OFFSET_HOURS*3600*1000);
+    const toDateTime = (date,time) => { const [y,m,d]=date.split('-').map(Number); const [hh,mm]=time.split(':').map(Number); return new Date(y,m-1,d,hh,mm,0,0); };
+
+    function getStartEnd(t){
+      const s = toDateTime(t.date, t.start || '00:00');
+      let e   = new Date(toDateTime(t.date, t.end || '23:59').getTime()+59000); // 分の境界漏れ防止
+      if(e <= s) e = new Date(e.getTime()+86400000); // 日跨ぎ補正
+      return {s,e};
+    }
+
+    // AP日付(00:00)基準の通し日（1970/1/1からの日数）
+    const apDayIndex = (dateStr) => Math.floor(toDateTime(dateStr,'00:00').getTime()/86400000);
+
+    let tasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+    // === 枠ごとのサブタスク定義（AP時間の代わりに表示） ===
+    const SUBTASKS = {
+      '避難所建設': ['建築戦力を上げる','建築加速を使う'],
+      '技術研究': ['研究戦力を上げる','研究加速を使う'],
+      '改造車強化': ['改造図を消費する','ゴールデンレンチを消費する','ジャンボゾンビを倒す','ゾンビを倒す'],
+      'ヒーロー育成': ['高級募集を行う','経験値を消費する'],
+      '軍隊拡張': ['訓練加速を使う','訓練して兵士を受け取る','兵士を昇格する'],
+      '凶暴首領（血のバラ）': ['1日4回攻撃する','ソフィア・カトリーナ・オリベイラ・セリーンをメインにする'],
+      '凶暴首領（暁の翼）': ['1日4回攻撃する','ローラ・エミリア・スカーレット・ニコスをメインにする'],
+      '凶暴首領（自由意志）': ['1日4回攻撃する','ミア・千夏・エブリン・桜をメインにする'],
+      'B777　ゾンビ暴君': ['参加しない場合はオフライン参加にチェックを入れてアプリを起動しない','集結広場レベル20以上の人のみ集結を発起する'],
+      'C777　ゾンビ暴君': ['参加しない場合はオフライン参加にチェックを入れてアプリを起動しない'],
+      'B777　ゾンビ暴君（準備）': ['部隊を開始時間までに本部に格納する'],
+      'C777　ゾンビ暴君（準備）': ['部隊を開始時間までに本部に格納する'],
+      '峡谷争奪戦（出欠確認）': ['金曜日20時からの峡谷争奪戦に参加可否を選んでください','早めの選択をお願いします'],
+      '峡谷争奪戦（準備）': ['部隊を開始時間までに本部に格納する','メインメンバーは開始5分前に入場可能','サブメンバーも待機しておく'],
+      '敵軍撃破（キルデー）': ['基本的に必ずシールドをする','対戦相手は282R','Lv.6都市内の略奪は禁止','Lv.6都市外の略奪はOK','282を防衛する侵略迎撃もOK','282RとのTvTを実施予定','282内で略奪すると強敵に迎撃される可能性あり'],
+      '黄色いバラを贈る': ['5本誰かに贈る','研究加速20%UP','2時間効果継続','月曜日に効果と本数が変わる','週跨ぎの効果は上書きされ相乗しない']
+    };
+
+    // メイン項目アイコン定義（タイトル→絵文字）
+    // メイン項目アイコン定義（タイトル→絵文字）
+    const ICON_BY_TITLE = {
+      // 既存メイン枠
+      '避難所建設':'🏕️',
+      '技術研究':'🧪',
+      '改造車強化':'🚙',
+      'ヒーロー育成':'🦸',
+      '軍隊拡張':'🛡️',
+
+      // レーダー/日課系
+      'レーダーミッション受領':'📡',
+      'レーダーミッションSランク厳選':'🏅',
+      'レーダーミッション貯蓄':'💾',
+      '部品箱を消費':'🧰',
+
+      // 消費・加速系（ALLDAY_PRESET）
+      '改造図を消費（19時、翌朝7時）':'📜',
+      'レンチを消費（19時、翌朝7時）':'🔧',
+      '避難者を募集（青・紫・橙）':'🧍‍♂️',
+      '懸賞任務を実施（橙）':'🎯',
+      '建築加速を消費（19時、翌朝7時）':'⏩',
+      '建築を完了（19時、翌朝7時）':'🏗️',
+      '都市間貿易トラックを実施（橙）':'🚚',
+      '保安官バッジを消費':'🎖️',
+      '研究加速を消費（19時、翌朝7時）':'⚡',
+      '研究を完了（19時、翌朝7時）':'🔬',
+
+      'フラグメントを消費（青・紫・橙）':'🧩',
+      '専用装備欠片を消費':'🪖',
+      'エネルギーコアを消費':'🔋',
+      'S級装備を消費':'🛡️',
+      '強化合金を消費':'🧱',
+      'スキルブックを消費（橙）':'📙',
+      '高級募集を実行（19時、翌朝7時）':'🎫',
+
+      '全ての加速を消費':'⏩',
+      '建築を完了':'🏗️',
+      '研究を完了':'🔬',
+      '兵士を昇格・受領（19時、翌朝7時）':'🥇',
+      '敵を倒す':'⚔️',
+
+      // ボス・イベント
+      '凶暴首領（血のバラ）':'🌹',
+      '凶暴首領（暁の翼）':'🌅',
+      '凶暴首領（自由意志）':'🕊️',
+      'B777　ゾンビ暴君':'🧟',
+      'C777　ゾンビ暴君':'🧟‍♀️',
+      'B777　ゾンビ暴君（準備）':'⏱️',
+      'C777　ゾンビ暴君（準備）':'⏱️',
+      '試練ゾンビ':'🧟',
+      '敵軍撃破（キルデー）':'⚔️',
+
+      '峡谷争奪戦':'🏞️',
+      '峡谷争奪戦（準備）':'⚙️',
+      '峡谷争奪戦（出欠確認）':'📣',
+
+      // デイリー報酬系
+      'VIP特典を受領':'🎖️',
+      '毎日特典を受領':'🎁',
+      'お買い得な補給を受領':'📦',
+      '避難救助月カードを受領（課金者のみ）':'💳',
+
+      // 闇市・ショップ
+      '闇市で買い物（更新）を完了':'🛒',
+      '闇市で資源ボックスを受領':'📦',
+
+      // PvP / アリーナ
+      '頂上競技場（アリーナ）で戦う':'🏟️',
+
+      // 燃料・図面
+      '無料燃料を100受け取る':'⛽',
+      'カトリーナの燃料100を受け取る':'⛽',
+      'ミア改造図を受け取る':'📜',
+
+      // 危機一髪 系
+      '危機一髪 自動チーム結成ボタンを押す':'🔘',
+      '危機一髪 集結を発起する 1回目':'📣',
+      '危機一髪 集結を発起する 2回目':'📣',
+      '危機一髪 集結を発起する 3回目':'📣',
+      '危機一髪 集結を発起する 4回目':'📣',
+      '危機一髪 集結を発起する 5回目':'📣',
+
+      // 都市間貿易：出発
+      '都市間貿易トラックを出発 1回目':'icons/都市間貿易トラック.png',
+      '都市間貿易トラックを出発 2回目':'icons/都市間貿易トラック.png',
+      '都市間貿易トラックを出発 3回目':'icons/都市間貿易トラック.png',
+      '都市間貿易トラックを出発 4回目':'icons/都市間貿易トラック.png',
+
+      // 都市間貿易：略奪（他サーバー）
+      '都市間貿易トラックを略奪（他サーバーを狙う） 1回目':'🚛💥',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 2回目':'🚛💥',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 3回目':'🚛💥',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 4回目':'🚛💥',
+
+      // 懸賞任務：略奪・協力
+      '他人の懸賞任務を略奪（他サーバーを狙う）1回目':'🏴‍☠️',
+      '他人の懸賞任務を略奪（他サーバーを狙う）2回目':'🏴‍☠️',
+      '他人の懸賞任務を略奪（他サーバーを狙う）3回目':'🏴‍☠️',
+      '他人の懸賞任務を略奪（他サーバーを狙う）4回目':'🏴‍☠️',
+      '他人の懸賞任務を略奪（他サーバーを狙う）5回目':'🏴‍☠️',
+
+      '盟友の懸賞任務を協力 1回目':'🤝',
+      '盟友の懸賞任務を協力 2回目':'🤝',
+      '盟友の懸賞任務を協力 3回目':'🤝',
+      '盟友の懸賞任務を協力 4回目':'🤝',
+      '盟友の懸賞任務を協力 5回目':'🤝',
+
+      '懸賞任務を実行':'🎯',
+
+      // 課金
+      'お得な宝物160円課金':'💎',
+
+      // その他デイリー
+      '黄色いバラを贈る':'🌼'
+    };
+
+
+    // サブ項目アイコン定義（テキスト→絵文字）
+    const SUB_ICON_BY_TEXT = {
+      '建築戦力を上げる':'🏗️',
+      '建築加速を使う':'⏩',
+      '研究戦力を上げる':'📚',
+      '研究加速を使う':'⏩',
+      '改造図を消費する':'📜',
+      'ゴールデンレンチを消費する':'🔧',
+      'ジャンボゾンビを倒す':'🧟‍♂️',
+      'ゾンビを倒す':'⚔️',
+      '高級募集を行う':'🎫',
+      '経験値を消費する':'📘',
+      '訓練加速を使う':'⏩',
+      '訓練して兵士を受け取る':'🪖',
+      '兵士を昇格する':'🔺',
+      '1日4回攻撃する':'4️⃣',
+      'ソフィア・カトリーナ・オリベイラ・セリーンをメインにする':'👩‍🎓',
+      'ローラ・エミリア・スカーレット・ニコスをメインにする':'🧑‍✈️',
+      'ミア・千夏・エブリン・桜をメインにする':'👩‍🚀',
+      '参加しない場合はオフライン参加にチェックを入れてアプリを起動しない':'🚫',
+      '集結広場レベル20以上の人のみ集結を発起する':'🏰',
+      '部隊を開始時間までに本部に格納する':'🏠',
+      '金曜日20時からの峡谷争奪戦に参加可否を選んでください':'✅',
+      '早めの選択をお願いします':'⏰',
+      'メインメンバーは開始5分前に入場可能':'⏱️',
+      'サブメンバーも待機しておく':'🧍',
+      '基本的に必ずシールドをする':'🛡️',
+      '対戦相手は282R':'📍',
+      'Lv.6都市内の略奪は禁止':'🚫',
+      'Lv.6都市外の略奪はOK':'✅',
+      '282を防衛する侵略迎撃もOK':'⚔️',
+      '282RとのTvTを実施予定':'📺',
+      '282内で略奪すると強敵に迎撃される可能性あり':'⚠️',
+      '5本誰かに贈る':'💐',
+      '研究加速20%UP':'⚡',
+      '2時間効果継続':'⏱️',
+      '月曜日に効果と本数が変わる':'📅',
+      '週跨ぎの効果は上書きされ相乗しない':'🔁'
+    };
+
+    function createIconNodeForTask(t){
+      const icon = ICON_BY_TITLE[t.title];
+      if (!icon) return null;
+
+      const span = document.createElement('span');
+      span.className = 'item-icon';
+
+      // 画像パスかどうかを判定（http(s) または 拡張子が画像っぽいもの）
+      const isImagePath =
+        /^https?:\/\//.test(icon) ||            // 絶対URL
+        /\.(png|jpe?g|gif|webp|svg)$/i.test(icon); // 相対パスOK
+
+      if (isImagePath) {
+        const img = document.createElement('img');
+        img.src = icon;
+        img.alt = '';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        img.loading = 'lazy';
+        span.appendChild(img);
+      } else {
+        // 絵文字やテキストはそのまま表示
+        span.textContent = icon;
+      }
+
+      return span;
+    }
+
+
+    // ==== AP基準の週次プリセット（6枠） ====
+    const WEEKLY_PRESET = {
+      1:[['00:00','03:59','避難所建設'],['04:00','07:59','技術研究'],['08:00','11:59','改造車強化'],['12:00','15:59','ヒーロー育成'],['16:00','19:59','軍隊拡張'],['20:00','23:59','改造車強化']],
+      2:[['00:00','03:59','技術研究'],['04:00','07:59','ヒーロー育成'],['08:00','11:59','避難所建設'],['12:00','15:59','軍隊拡張'],['16:00','19:59','改造車強化'],['20:00','23:59','避難所建設']],
+      3:[['00:00','03:59','ヒーロー育成'],['04:00','07:59','軍隊拡張'],['08:00','11:59','技術研究'],['12:00','15:59','改造車強化'],['16:00','19:59','避難所建設'],['20:00','23:59','技術研究']],
+      4:[['00:00','03:59','軍隊拡張'],['04:00','07:59','改造車強化'],['08:00','11:59','ヒーロー育成'],['12:00','15:59','避難所建設'],['16:00','19:59','技術研究'],['20:00','23:59','ヒーロー育成']],
+      5:[['00:00','03:59','改造車強化'],['04:00','07:59','避難所建設'],['08:00','11:59','軍隊拡張'],['12:00','15:59','技術研究'],['16:00','19:59','ヒーロー育成'],['20:00','23:59','軍隊拡張']],
+      6:[['00:00','03:59','技術研究'],['04:00','07:59','改造車強化'],['08:00','11:59','ヒーロー育成'],['12:00','15:59','避難所建設'],['16:00','19:59','軍隊拡張'],['20:00','23:59','ヒーロー育成']],
+      0:[['00:00','03:59','改造車強化'],['04:00','07:59','避難所建設'],['08:00','11:59','軍隊拡張'],['12:00','15:59','技術研究'],['16:00','19:59','ヒーロー育成'],['20:00','23:59','軍隊拡張']]
+    };
+
+    // 曜日別の終日タスク（AP日付で今日のみ表示）
+    const ALLDAY_PRESET = {
+      1: ['レーダーミッション受領','部品箱を消費','改造図を消費（19時、翌朝7時）','レンチを消費（19時、翌朝7時）'],
+      2: ['避難者を募集（青・紫・橙）','懸賞任務を実施（橙）','建築加速を消費（19時、翌朝7時）','建築を完了（19時、翌朝7時）'],
+      3: ['レーダーミッションSランク厳選','都市間貿易トラックを実施（橙）','保安官バッジを消費','研究加速を消費（19時、翌朝7時）','研究を完了（19時、翌朝7時）'],
+      4: ['レーダーミッション貯蓄','フラグメントを消費（青・紫・橙）','専用装備欠片を消費','エネルギーコアを消費','S級装備を消費','強化合金を消費','スキルブックを消費（橙）','高級募集を実行（19時、翌朝7時）'],
+      5: ['レーダーミッション受領','全ての加速を消費','建築を完了','研究を完了','兵士を昇格・受領（19時、翌朝7時）'],
+      6: ['レーダーミッションSランク厳選','全ての加速を消費','懸賞任務を実施（橙）','都市間貿易トラックを実施（橙）','敵を倒す'],
+      0: ['レーダーミッション貯蓄']
+    };
+
+    // 毎日共通の終日タスク（曜日に関係なく毎日入れる）
+    const DAILY_COMMON = [
+      'VIP特典を受領',
+      '毎日特典を受領',
+      'お買い得な補給を受領',
+      '避難救助月カードを受領（課金者のみ）',
+      '闇市で買い物（更新）を完了',
+      '闇市で資源ボックスを受領',
+      '頂上競技場（アリーナ）で戦う',
+      '危機一髪 自動チーム結成ボタンを押す',
+      '危機一髪 集結を発起する 1回目',
+      '危機一髪 集結を発起する 2回目',
+      '危機一髪 集結を発起する 3回目',
+      '危機一髪 集結を発起する 4回目',
+      '危機一髪 集結を発起する 5回目',
+      '都市間貿易トラックを出発 1回目',
+      '都市間貿易トラックを出発 2回目',
+      '都市間貿易トラックを出発 3回目',
+      '都市間貿易トラックを出発 4回目',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 1回目',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 2回目',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 3回目',
+      '都市間貿易トラックを略奪（他サーバーを狙う） 4回目',
+      '他人の懸賞任務を略奪（他サーバーを狙う）1回目',
+      '他人の懸賞任務を略奪（他サーバーを狙う）2回目',
+      '他人の懸賞任務を略奪（他サーバーを狙う）3回目',
+      '他人の懸賞任務を略奪（他サーバーを狙う）4回目',
+      '他人の懸賞任務を略奪（他サーバーを狙う）5回目',
+      '盟友の懸賞任務を協力 1回目',
+      '盟友の懸賞任務を協力 2回目',
+      '盟友の懸賞任務を協力 3回目',
+      '盟友の懸賞任務を協力 4回目',
+      '盟友の懸賞任務を協力 5回目',
+      '懸賞任務を実行',
+      'お得な宝物160円課金',
+      'カトリーナの燃料100を受け取る',
+      'ミア改造図を受け取る',
+      '黄色いバラを贈る'
+    ];
+
+    // === ランク定義（タイトル一致で割り当て） ===
+    const RANK_BY_TITLE = {
+      '峡谷争奪戦':'S',
+      '峡谷争奪戦（準備）':'A',
+      '峡谷争奪戦（出欠確認）':'A',
+      'B777　ゾンビ暴君':'S',
+      'C777　ゾンビ暴君':'S',
+      'B777　ゾンビ暴君（準備）':'A',
+      'C777　ゾンビ暴君（準備）':'A',
+      '凶暴首領（血のバラ）':'B',
+      '凶暴首領（暁の翼）':'B',
+      '凶暴首領（自由意志）':'B',
+      '試練ゾンビ':'B',
+      '黄色いバラを贈る':'A',
+      '敵軍撃破（キルデー）':'S',
+      '避難所建設':'B', '技術研究':'B', '改造車強化':'B', 'ヒーロー育成':'B', '軍隊拡張':'B'
+    };
+    const DEFAULT_RANK = 'C';
+
+    // タイトルに【S】や[S]などのタグが先頭にある場合は優先採用
+    const RANK_TAG_RE = /^\s*(?:[\[【]([SABCD])[\]】])\s*/;
+    function parseRankFromTitle(title){
+      const m = title.match(RANK_TAG_RE);
+      return m ? m[1] : null;
+    }
+    function stripRankTag(title){
+      return title.replace(RANK_TAG_RE, '');
+    }
+
+    // ==== ランク決定の追加ルール ====
+    // 週次プリセットの 08:00-11:59 と 20:00-23:59 は S
+    const SPECIAL_WEEKLY_S_RANGES = [ ['08:00','11:59'], ['20:00','23:59'] ];
+    function isInSpecialSRange(start,end){
+      return SPECIAL_WEEKLY_S_RANGES.some(([s,e])=>s===start && e===end);
+    }
+    // 曜日別の終日タスク（ALLDAY_PRESET）タイトルを A の既定にするための判定
+    function isWeekdayAllDayTitle(title){
+      for(const k of Object.keys(ALLDAY_PRESET)){
+        if((ALLDAY_PRESET[k]||[]).includes(title)) return true;
+      }
+      return false;
+    }
+    function getRankForTask(t){
+      // 1) タグ優先
+      const tagged = parseRankFromTitle(t.title);
+      if(tagged) return tagged;
+      // 2) 週次特別枠 → S
+      if(isInSpecialSRange(t.start,t.end)) return 'S';
+      // 3) 曜日別の終日タスク
+      if(t.allDay && isWeekdayAllDayTitle(t.title)){
+        // （19時、翌朝7時） を含むものは S で上書き
+        if(/(19時|翌朝7時)/.test(t.title)) return 'S';
+        return 'A';
+      }
+      // 4) 固定マップ or 既定
+      return RANK_BY_TITLE[t.title] || DEFAULT_RANK;
+    }
+
+    // === 凶暴首領スケジュール（曜日×4枠） ===
+    const BOSS_SLOTS = [ ['00:00','02:59'], ['06:00','08:59'], ['12:00','14:59'], ['18:00','20:59'] ];
+    function pushBoss(list, w, dateStr){
+      const push = (name)=>{
+        for(const [s,e] of BOSS_SLOTS){
+          list.push({ id: Math.random().toString(36).slice(2), title: name, date: dateStr, allDay:false, start:s, end:e, completed:false });
+        }
+      };
+      if(w===1 || w===4) push('凶暴首領（血のバラ）');
+      if(w===2 || w===5) push('凶暴首領（暁の翼）');
+      if(w===3 || w===6) push('凶暴首領（自由意志）');
+    }
+
+    function ensurePresetForToday(){
+      const today = apNow();
+      const todayStr = fmtDate(today);
+      if(localStorage.getItem(PRESET_KEY) === todayStr) return;
+
+      // 今日の分を一旦削除
+      tasks = (tasks||[]).filter(t=>t.date!==todayStr);
+      const w = today.getDay();
+
+      // 時間枠 6本投入（AP基準）
+      for(const [start,end,title] of (WEEKLY_PRESET[w]||[])){
+        tasks.push({ id:Math.random().toString(36).slice(2), title, date:todayStr, allDay:false, start, end, completed:false });
+      }
+      // 終日投入（曜日別）
+      for(const ttl of (ALLDAY_PRESET[w]||[])){
+        tasks.push({ id:Math.random().toString(36).slice(2), title:ttl, date:todayStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+      // 峡谷争奪戦（出欠確認）
+      if (w === 3) {
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'峡谷争奪戦（出欠確認）', date: todayStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+      // 土曜はキルデー（終日）
+      if (w === 6) {
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'敵軍撃破（キルデー）', date: todayStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+      // 日曜は試練ゾンビ（終日）
+      if (w === 0) {
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'試練ゾンビ', date: todayStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+      // 共通終日タスク（毎日）
+      for(const ttl of DAILY_COMMON){
+        tasks.push({ id:Math.random().toString(36).slice(2), title:ttl, date:todayStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+
+      // 無料燃料100の受け取り（時間帯タスク：08:00-19:59 / 20:00-翌07:59）
+      tasks.push({ id: Math.random().toString(36).slice(2), title:'無料燃料を100受け取る', date: todayStr, allDay:false, start:'08:00', end:'19:59', completed:false });
+      tasks.push({ id: Math.random().toString(36).slice(2), title:'無料燃料を100受け取る', date: todayStr, allDay:false, start:'20:00', end:'07:59', completed:false });
+
+      // 凶暴首領（曜日別）
+      pushBoss(tasks, w, todayStr);
+
+      // === 毎週金曜の「峡谷争奪戦」（AP 09:00〜09:40） ===
+      if (w === 5) {
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'峡谷争奪戦', date: todayStr, allDay:false, start:'09:00', end:'09:40', completed:false });
+      }
+
+      // === 毎週金曜の「峡谷争奪戦準備」（AP 09:00〜09:40） ===
+      if (w === 5) {
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'峡谷争奪戦（準備）', date: todayStr, allDay:false, start:'08:30', end:'08:59', completed:false });
+      }
+
+      // === 3日おきのゾンビ暴君（B777 & C777） ===
+      let baseDay = Number(localStorage.getItem(ZOMBIE_BASE_KEY));
+      const todayDay = apDayIndex(todayStr);
+      if(!Number.isFinite(baseDay)) { baseDay = todayDay; localStorage.setItem(ZOMBIE_BASE_KEY, String(baseDay)); }
+      if (((todayDay - baseDay) % 3 + 3) % 3 === 0) {
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'B777　ゾンビ暴君（準備）', date: todayStr, allDay:false, start:'09:30', end:'09:59', completed:false });
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'B777　ゾンビ暴君', date: todayStr, allDay:false, start:'10:00', end:'10:15', completed:false });
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'C777　ゾンビ暴君（準備）', date: todayStr, allDay:false, start:'10:30', end:'10:59', completed:false });
+        tasks.push({ id: Math.random().toString(36).slice(2), title:'C777　ゾンビ暴君', date: todayStr, allDay:false, start:'11:00', end:'11:15', completed:false });
+      }
+
+      localStorage.setItem(PRESET_KEY, todayStr);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
+
+    function classify(t, now){
+      if(t.completed) return 'done';
+      if(t.allDay) return 'today';
+      const {s,e} = getStartEnd(t);
+      if(e <= now) return 'done';
+      if(s <= now && now < e) return 'now';
+      if(s >  now && fmtDate(s)===fmtDate(now)) return 'upcoming';
+      return null;
+    }
+
+    function createRankBadge(rank){
+      const r = document.createElement('span');
+      r.className = 'rank-badge';
+      r.textContent = rank;
+      r.title = `ランク: ${rank}`;
+      return r;
+    }
+
+    function decorateItemWithRank(el, rank){
+      el.classList.add(`rank-${rank}`);
+    }
+
+    function buildSubsHtml(details){
+      if(!details || !details.length) return '';
+      const items = details.map(text=>{
+        const icon = SUB_ICON_BY_TEXT[text];
+        const iconHtml = icon ? `<span class="sub-icon">${icon}</span>` : '';
+        return `<li>${iconHtml}${text}</li>`;
+      }).join('');
+      return `<ul class="subs">${items}</ul>`;
+    }
+
+    function itemTemplate(t, key){
+      const wrap = document.createElement('div');
+      const rank = getRankForTask(t);
+      wrap.className = 'item clickable' + (key==='now'?' now': key==='upcoming'?' future':'');
+      decorateItemWithRank(wrap, rank);
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !!t.completed;
+      checkbox.onchange = ()=>{ t.completed = checkbox.checked; localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); draw(); };
+
+      const main  = document.createElement('div');
+      const name  = document.createElement('div');
+      const iconNode = createIconNodeForTask(t);
+      if(iconNode) name.append(iconNode);
+      name.append(document.createTextNode(stripRankTag(t.title)));
+      const meta  = document.createElement('div'); meta.className='muted';
+
+      const rankWrap = document.createElement('div');
+      rankWrap.append(createRankBadge(rank));
+
+      const details = SUBTASKS[t.title] || [];
+
+      if(t.allDay){
+        const subsHtml = buildSubsHtml(details);
+        meta.innerHTML = `<span class="jp">終日</span>${subsHtml}`;
+      }else{
+        const {s,e} = getStartEnd(t);
+        const jpS = new Date(s.getTime() - OFFSET_HOURS*3600*1000);
+        const jpE = new Date(e.getTime() - OFFSET_HOURS*3600*1000);
+        const subsHtml = buildSubsHtml(details);
+        meta.innerHTML = `<span class="jp" style="font-size:14px;">日本時間 ${fmtTime(jpS)}〜${fmtTime(jpE)}</span>${subsHtml}`;
+      }
+
+      main.append(name, meta);
+      wrap.append(checkbox, main, rankWrap);
+
+      // クリックでチェック切り替え（チェックボックス/リンクを直接クリックした時は除外）
+      wrap.addEventListener('click', (ev)=>{
+        if (ev.target === checkbox || ev.target.closest('a')) return;
+        checkbox.checked = !checkbox.checked;
+        t.completed = checkbox.checked;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        draw();
+      });
+      // キーボード操作（Enter/Space）
+      wrap.tabIndex = 0;
+      wrap.addEventListener('keydown', (ev)=>{
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          checkbox.checked = !checkbox.checked;
+          t.completed = checkbox.checked;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          draw();
+        }
+      });
+
+      return wrap;
+    }
+
+    function itemTemplateReadOnly(t){
+      const wrap = document.createElement('div');
+      const rank = getRankForTask(t);
+      wrap.className = 'item ro';
+      decorateItemWithRank(wrap, rank);
+
+      const main  = document.createElement('div');
+      const name  = document.createElement('div');
+      const iconNode = createIconNodeForTask(t);
+      if(iconNode) name.append(iconNode);
+      name.append(document.createTextNode(stripRankTag(t.title)));
+      const meta  = document.createElement('div'); meta.className='muted';
+
+      const rankWrap = document.createElement('div');
+      rankWrap.append(createRankBadge(rank));
+
+      const details = SUBTASKS[t.title] || [];
+
+      if(t.allDay){
+        const subsHtml = buildSubsHtml(details);
+        meta.innerHTML = `<span class="jp">終日</span>${subsHtml}`;
+      }else{
+        const {s,e} = getStartEnd(t);
+        const jpS = new Date(s.getTime() - OFFSET_HOURS*3600*1000);
+        const jpE = new Date(e.getTime() - OFFSET_HOURS*3600*1000);
+        const subsHtml = buildSubsHtml(details);
+        meta.innerHTML = `<span class="jp" style="font-size:14px;">日本時間 ${fmtTime(jpS)}〜${fmtTime(jpE)}</span>${subsHtml}`;
+      }
+
+      main.append(name, meta);
+      wrap.append(main, rankWrap);
+      return wrap;
+    }
+
+    function buildPresetFor(dateObj){
+      const dateStr = fmtDate(dateObj);
+      const w = dateObj.getDay();
+      const preview = [];
+      for(const [start,end,title] of (WEEKLY_PRESET[w]||[])){
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title, date:dateStr, allDay:false, start, end, completed:false });
+      }
+      for(const ttl of (ALLDAY_PRESET[w]||[])){
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:ttl, date:dateStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+      for(const ttl of DAILY_COMMON){
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:ttl, date:dateStr, allDay:true, start:'00:00', end:'23:59', completed:false });
+      }
+      // 無料燃料100の受け取り（プレビュー用：08:00-19:59 / 20:00-翌07:59）
+      preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'無料燃料を100受け取る', date: dateStr, allDay:false, start:'08:00', end:'19:59', completed:false });
+      preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'無料燃料を100受け取る', date: dateStr, allDay:false, start:'20:00', end:'07:59', completed:false });
+
+      // 凶暴首領（曜日別）
+      pushBoss(preview, w, dateStr);
+
+      if (w === 5) {
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'峡谷争奪戦', date: dateStr, allDay:false, start:'09:00', end:'09:40', completed:false });
+      }
+      if (w === 5) {
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'峡谷争奪戦（準備）', date: dateStr, allDay:false, start:'08:30', end:'08:59', completed:false });
+      }
+      let baseDay = Number(localStorage.getItem(ZOMBIE_BASE_KEY));
+      const tday = apDayIndex(dateStr);
+      if(!Number.isFinite(baseDay)) baseDay = tday;
+      if (((tday - baseDay) % 3 + 3) % 3 === 0) {
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'B777　ゾンビ暴君（準備）', date: dateStr, allDay:false, start:'09:30', end:'09:59', completed:false });
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'B777　ゾンビ暴君', date: dateStr, allDay:false, start:'10:00', end:'10:15', completed:false });
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'C777　ゾンビ暴君（準備）', date: dateStr, allDay:false, start:'10:30', end:'10:59', completed:false });
+        preview.push({ id: 'prev_'+Math.random().toString(36).slice(2), title:'C777　ゾンビ暴君', date: dateStr, allDay:false, start:'11:00', end:'11:15', completed:false });
+      }
+      return preview;
+    }
+
+    function draw(){
+      const now = apNow();
+      const todayStr = fmtDate(now);
+      const jpNow = new Date(now.getTime() - OFFSET_HOURS*3600*1000);
+      const clk = document.getElementById('clock');
+      if(clk) clk.textContent = `日本時間 ${fmtDate(jpNow)} ${fmtTime(jpNow)} ／ 終末時間 ${fmtDate(now)} ${fmtTime(now)}`;
+
+      const todays = (tasks||[]).filter(t=>t.date===todayStr);
+      const buckets = { now:[], today:[], upcoming:[], done:[] };
+      for(const t of todays){ const k = classify(t, now); if(k) buckets[k].push(t); }
+
+      for(const k of Object.keys(buckets)){
+        const list = document.getElementById(`${k}-list`); if(!list) continue; list.innerHTML='';
+        buckets[k].sort((a,b)=> (a.start||'00:00').localeCompare(b.start||'00:00'));
+        for(const t of buckets[k]) list.append(itemTemplate(t,k));
+        const badge=document.getElementById(`${k}-count`); if(badge) badge.textContent=String(buckets[k].length);
+      }
+
+      // 明日の予定（プレビュー：チェックなし、ストレージ未保存）
+      const tomorrow = new Date(now.getTime()+86400000);
+      const pv = buildPresetFor(tomorrow);
+      pv.sort((a,b)=> (a.allDay===b.allDay ? (a.start||'00:00').localeCompare(b.start||'00:00') : (a.allDay?1:-1)));
+      const tlist = document.getElementById('tomorrow-list');
+      if(tlist){ tlist.innerHTML=''; pv.forEach(t=> tlist.append(itemTemplateReadOnly(t))); }
+      const tbadge = document.getElementById('tomorrow-count'); if(tbadge) tbadge.textContent = String(pv.length);
+    }
+
+    // ==== 起動処理（保存版仕様：スタンプ削除→当日再投入） ====
+    try{ localStorage.removeItem(PRESET_KEY); }catch(e){}
+    ensurePresetForToday();
+    draw();
+    setInterval(draw, 30*1000);
+
+    // 手動再投入
+    (function(){ const btn=document.getElementById('reloadBtn'); if(!btn) return; btn.addEventListener('click',()=>{ try{localStorage.removeItem(PRESET_KEY);}catch(e){} ensurePresetForToday(); draw(); }); })();
+
+    // ==== 簡易セルフテスト（DOM/パース/ランク/アイコン） ====
+    (function(){
+      try{
+        console.assert(document.querySelector('.container') && document.getElementById('tomorrow-list'), 'DOM base elements exist');
+        console.assert(isWeekdayAllDayTitle('建築加速を消費（19時、翌朝7時）')===true, 'weekday all-day title detection');
+        // rank parse tests (既存)
+        console.assert(parseRankFromTitle('【S】峡谷争奪戦')==='S', 'rank tag fullwidth');
+        console.assert(parseRankFromTitle('[A] B777　ゾンビ暴君')==='A', 'rank tag ascii');
+        console.assert(stripRankTag('【S】峡谷争奪戦')==='峡谷争奪戦', 'strip works');
+        // 追加テスト: 週次S帯
+        (function(){
+          const t={title:'改造車強化', allDay:false, start:'08:00', end:'11:59'}; console.assert(getRankForTask(t)==='S','weekly special AM is S');
+          const u={title:'改造車強化', allDay:false, start:'20:00', end:'23:59'}; console.assert(getRankForTask(u)==='S','weekly special PM is S');
+        })();
+        // 追加テスト: 曜日終日(A) と （19時、翌朝7時） 含む(S)
+        (function(){
+          const tA='レーダーミッション受領'; console.assert(isWeekdayAllDayTitle(tA), 'weekday title detected');
+          const tS='建築を完了（19時、翌朝7時）'; console.assert(isWeekdayAllDayTitle(tS), 'weekday title detected 2');
+          const ta={title:tA, allDay:true, start:'00:00', end:'23:59'}; console.assert(getRankForTask(ta)==='A','weekday all-day default A');
+          const ts={title:tS, allDay:true, start:'00:00', end:'23:59'}; console.assert(getRankForTask(ts)==='S','weekday all-day with (19/7) is S');
+        })();
+        // 追加テスト: 暴君S と SUBTASKS のキー存在
+        (function(){
+          const b={title:'B777　ゾンビ暴君', allDay:false, start:'10:00', end:'10:15'}; console.assert(getRankForTask(b)==='S','B777 tyrant S');
+          const c={title:'C777　ゾンビ暴君', allDay:false, start:'11:00', end:'11:15'}; console.assert(getRankForTask(c)==='S','C777 tyrant S');
+          console.assert(Array.isArray(SUBTASKS['B777　ゾンビ暴君']) && Array.isArray(SUBTASKS['C777　ゾンビ暴君']), 'SUBTASKS entries for tyrants exist');
+          console.assert(Array.isArray(SUBTASKS['黄色いバラを贈る']), 'SUBTASKS entry for all-day daily title exists');
+        })();
+        // 追加テスト: 無料燃料 2 本（時間帯）
+        (function(){
+          const prev = buildPresetFor(apNow());
+          const cnt = prev.filter(x=>x.title==='無料燃料を100受け取る').length;
+          console.assert(cnt===2, 'two free-fuel windows exist');
+        })();
+        // 追加テスト: サブアイコン定義が効くか
+        (function(){
+          console.assert(SUB_ICON_BY_TEXT['建築戦力を上げる']==='🏗️', 'sub icon mapping exists');
+        })();
+      }catch(e){ console.warn('SelfTest warning:', e); }
+    })();
+  </script>
+</body>
+</html>
