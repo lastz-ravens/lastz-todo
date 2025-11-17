@@ -1410,7 +1410,6 @@
     }
 
     // ==== 起動処理 ====
-    try{ localStorage.removeItem(PRESET_KEY); }catch(e){}
     ensurePresetForToday();
     draw();
     setInterval(draw, 30*1000);
